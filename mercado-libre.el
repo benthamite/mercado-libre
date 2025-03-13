@@ -52,6 +52,7 @@ timestamp)'.")
 
 ;;;; Functions
 
+;;;###autoload
 (defun mercado-libre-monitor (query &optional condition max-items)
   "Monitor for new Mercado Libre listings matching QUERY.
 Shows only listings that have appeared since the last check. For
