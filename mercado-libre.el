@@ -27,8 +27,11 @@
 
 ;;; Code:
 
-(require 'cl)
+(require 'cl-lib)
+(require 'org)
+(require 'auth-source-pass)
 (require 'json)
+(require 'url-vars)
 
 ;;;; Variables
 
@@ -94,7 +97,7 @@ MAX-ITEMS to display."
           (goto-char (point-max))
           (insert "\nSetup complete. Next time you run this command, ")
           (insert "you'll see only new listings since this check.\n")))
-      (cl-return-from mercado-libre-monitor))
+      (cl-return-from mercado-libre-monitor nil))
     
     ;; If we get here, this is a regular monitoring run
     ;; Get the query-specific database (which should now exist)
@@ -196,7 +199,6 @@ MAX-ITEMS to display."
                      (format-time-string "%Y-%m-%d" (date-to-time last-check-time))
                      (length listings-with-dates))
              listings-with-dates
-             token
              (format "Total listings tracked: %d | Last check: %s"
                      (- (hash-table-count query-db) 1) ; Subtract 1 for last_check_time key
                      (format-time-string "%Y-%m-%d %H:%M" (date-to-time last-check-time))))))))))
@@ -250,6 +252,168 @@ CONDITION is \"used\", \"new\" or \"all\". TOKEN is the auth token."
     
     (message "Database built with %d listings for '%s'."
              (- (hash-table-count query-db) 1) query)))  ; -1 for last_check_time key
+
+(defun mercado-libre-get-all-listings (query condition token &optional limit)
+  "Get all Mercado Libre listings for QUERY and CONDITION.
+Uses pagination to get all results up to LIMIT (if provided). TOKEN is
+the auth token."
+  (let* ((offset 0)
+         (limit-per-page 50)
+         (all-results '())
+         (condition-param (unless (string= condition "all")
+                            (format "&ITEM_CONDITION=%s"
+                                    (if (string= condition "used") "2230581" "2230284"))))
+         (more-results t)
+         (progress-reporter (make-progress-reporter
+                             (format "Fetching all listings for '%s'..." query) 0 100))
+         (total-count nil))
+    
+    (while (and more-results (or (null limit) (< (length all-results) limit)))
+      (let* ((url (format "https://api.mercadolibre.com/sites/MLA/search?q=%s&limit=%d&offset=%d%s"
+                          (url-hexify-string query)
+                          limit-per-page offset
+                          (or condition-param "")))
+             (url-request-method "GET")
+             (url-request-extra-headers
+              `(("Authorization" . ,(format "Bearer %s" token))))
+             (json-object-type 'alist)
+             (json-array-type 'list)
+             (json-key-type 'symbol)
+             (json-buffer (url-retrieve-synchronously url t)))
+        
+        (with-current-buffer json-buffer
+          (goto-char (point-min))
+          (re-search-forward "\r?\n\r?\n" nil t)
+          (let* ((json-data (json-read))
+                 (results (cdr (assoc 'results json-data)))
+                 (paging (cdr (assoc 'paging json-data))))
+            
+            ;; Get total count if we don't have it yet
+            (unless total-count
+              (setq total-count (or (cdr (assoc 'total paging)) 0))
+              (progress-reporter-force-update
+               progress-reporter 0
+               (format "Fetching %d listings for '%s'..." total-count query)))
+            
+            ;; Add results to our collection
+            (setq all-results (append all-results results))
+            
+            ;; Update progress
+            (progress-reporter-update
+             progress-reporter
+             (min 99 (* 100 (/ (float (length all-results)) (float (or total-count 1))))))
+            
+            ;; Check if we have more pages
+            (setq offset (+ offset limit-per-page))
+            (setq more-results (and results
+                                    (> (length results) 0)
+                                    (< offset (or total-count 0)))))))
+      
+      ;; Sleep briefly to avoid overloading the API
+      (sleep-for 0.2))
+    
+    (progress-reporter-done progress-reporter)
+    all-results))
+
+(defvar mercado-libre-item-cache (make-hash-table :test 'equal)
+  "Cache for Mercado Libre item details to avoid redundant API calls.")
+
+(defun mercado-libre-get-item-details-cached (item-id token)
+  "Get detailed information about a specific item by ITEM-ID with caching.
+TOKEN is the auth token."
+  (or (gethash item-id mercado-libre-item-cache)
+      (let ((details (mercado-libre-get-item-details item-id token)))
+        (when details
+          (puthash item-id details mercado-libre-item-cache))
+        details)))
+
+(defun mercado-libre-get-item-details (item-id token)
+  "Get detailed information about a specific item by ITEM-ID.
+TOKEN is the auth token."
+  (let* ((url (format "https://api.mercadolibre.com/items/%s" item-id))
+         (url-request-method "GET")
+         (url-request-extra-headers
+          `(("Authorization" . ,(format "Bearer %s" token))))
+         (json-object-type 'alist)
+         (json-array-type 'list)
+         (json-key-type 'symbol)
+         (json-buffer (url-retrieve-synchronously url t)))
+    (with-current-buffer json-buffer
+      (goto-char (point-min))
+      (re-search-forward "\r?\n\r?\n" nil t)
+      (condition-case err
+          (json-read)
+        (error
+         (message "Error getting item details for %s: %S" item-id err)
+         nil)))))
+
+(defun mercado-libre-display-results (query condition items-with-dates &optional footer)
+  "Display sorted ITEMS-WITH-DATES in a nicely formatted buffer.
+FOOTER is optional text to display at the bottom of the results. QUERY and
+and CONDITION are used for the buffer title."
+  (message "Displaying %d sorted results" (length items-with-dates))
+  (let* ((buffer (get-buffer-create "*Mercado Libre Monitor*"))
+         (image-dir (expand-file-name "mercado-libre-images" temporary-file-directory)))
+    
+    ;; Create directory for images if it doesn't exist
+    (unless (file-exists-p image-dir)
+      (make-directory image-dir t))
+    
+    ;; Process each result and download images
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (org-mode)
+        (insert (format "* Mercado Libre Results for: %s (%s)\n\n"
+                        query condition))
+        
+        (dolist (item-with-date items-with-dates)
+          (let* ((date-created (car item-with-date))
+                 (item (cdr item-with-date))
+                 (title (cdr (assoc 'title item)))
+                 (price (cdr (assoc 'price item)))
+                 (currency (cdr (assoc 'currency_id item)))
+                 (url (cdr (assoc 'permalink item)))
+                 (item-condition (cdr (assoc 'condition item)))
+                 (thumbnail (cdr (assoc 'thumbnail item)))
+                 (image-file (when thumbnail
+                               (expand-file-name
+                                (format "%s.jpg" (md5 thumbnail))
+                                image-dir))))
+            
+            ;; Download image if available
+            (when (and thumbnail (not (file-exists-p image-file)))
+              (condition-case err
+                  (url-copy-file thumbnail image-file t)
+                (error
+                 (message "Error downloading image %s: %S" thumbnail err))))
+            
+            ;; Insert item details
+            (insert (format "** %s\n" (or title "No Title")))
+            (insert "   :PROPERTIES:\n")
+            (when price
+              (insert (format "   :PRICE: %s %s\n" (or currency "") price)))
+            (when item-condition
+              (insert (format "   :CONDITION: %s\n" item-condition)))
+            (insert (format "   :PUBLISHED: %s\n"
+                            (format-time-string
+                             "%Y-%m-%d"
+                             (date-to-time date-created))))
+            (insert "   :END:\n")
+            
+            ;; Insert image if available
+            (when (and image-file (file-exists-p image-file))
+              (insert (format "[[file:%s]]\n\n" image-file)))
+            
+            (when url
+              (insert (format "[[%s][View on Mercado Libre]]\n\n" url)))))
+        
+        ;; Add footer if provided
+        (when footer
+          (insert (format "* %s\n" footer)))))
+    
+    (switch-to-buffer buffer)
+    (org-display-inline-images)))
 
 (defun mercado-libre-load-listings-db ()
   "Load the listings database from disk."
