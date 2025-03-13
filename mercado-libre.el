@@ -94,7 +94,7 @@ MAX-ITEMS to display."
           (goto-char (point-max))
           (insert "\nSetup complete. Next time you run this command, ")
           (insert "you'll see only new listings since this check.\n")))
-      (return-from mercado-libre-monitor))
+      (cl-return-from mercado-libre-monitor))
     
     ;; If we get here, this is a regular monitoring run
     ;; Get the query-specific database (which should now exist)
