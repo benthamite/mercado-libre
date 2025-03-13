@@ -228,7 +228,8 @@ MAX-ITEMS to display."
 
 ;; Make first-run internal to avoid duplication
 (defun mercado-libre-first-run (query condition token)
-  "Do the initial run to build the database for QUERY."
+  "Do the initial run to build the database for QUERY.
+CONDITION is \"used\", \"new\" or \"all\". TOKEN is the auth token."
   (let* ((cache-key (format "%s:%s" query condition))
          (query-db (make-hash-table :test 'equal))
          (current-time (format-time-string "%Y-%m-%dT%H:%M:%S.000Z" (current-time)))
