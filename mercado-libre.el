@@ -27,6 +27,9 @@
 
 ;;; Code:
 
+(require 'cl)
+(require 'json)
+
 ;;;; Variables
 
 (defgroup mercado-libre ()
