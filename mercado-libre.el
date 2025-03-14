@@ -197,9 +197,8 @@ TOKEN is the auth token."
   "Get detailed information about a specific item by ITEM-ID with caching.
 TOKEN is the auth token."
   (or (gethash item-id mercado-libre-item-cache)
-      (let ((details (mercado-libre-get-item-details item-id token)))
-        (when details
-          (puthash item-id details mercado-libre-item-cache))
+      (when-let ((details (mercado-libre-get-item-details item-id token)))
+	(puthash item-id details mercado-libre-item-cache)
         details)))
 
 ;;;; Database Management
@@ -276,15 +275,14 @@ TOKEN is the auth token."
   "Get the best available image URL for ITEM with ITEM-ID."
   (let ((image-url nil))
     ;; Try to get a better quality image from the item details
-    (let ((item-details (gethash item-id mercado-libre-item-cache)))
-      (when item-details
-        (let ((pictures (cdr (assoc 'pictures item-details))))
-          (when (and pictures (> (length pictures) 0))
-            ;; Get the first picture's highest quality URL
-            (let* ((first-pic (car pictures))
-                   (secure-url (cdr (assoc 'secure_url first-pic))))
-              (when secure-url
-                (setq image-url secure-url)))))))
+    (when-let ((item-details (gethash item-id mercado-libre-item-cache))
+	       (pictures (cdr (assoc 'pictures item-details))))
+      (when (> (length pictures) 0)
+	;; Get the first picture's highest quality URL
+	(let* ((first-pic (car pictures))
+	       (secure-url (cdr (assoc 'secure_url first-pic))))
+	  (when secure-url
+            (setq image-url secure-url)))))
     
     ;; Fall back to thumbnail if we couldn't get a better image
     (or image-url (cdr (assoc 'thumbnail item)))))
@@ -363,11 +361,10 @@ and CONDITION are used for the buffer title."
 
 (defun mercado-libre-display-buffer-with-images ()
   "Display buffer and show inline images."
-  (let ((window (display-buffer-pop-up-window (get-buffer mercado-libre-buffer-name) nil)))
-    (when window
-      (with-selected-window window
-        (goto-char (point-min))
-        (org-display-inline-images))))
+  (when-let ((window (display-buffer-pop-up-window (get-buffer mercado-libre-buffer-name) nil)))
+    (with-selected-window window
+      (goto-char (point-min))
+      (org-display-inline-images)))
   (org-display-inline-images))
 
 (defun mercado-libre-display-no-results (query condition last-check-time query-db)
