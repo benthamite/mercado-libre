@@ -387,13 +387,35 @@ QUERY, CONDITION, LAST-CHECK-TIME and QUERY-DB provide context."
   "Do the initial run to build the database for QUERY.
 CONDITION is \"used\", \"new\" or \"all\". TOKEN is the auth token."
   (let* ((query-db (mercado-libre-get-query-db query condition))
-         (all-listings (mercado-libre-get-all-listings query condition token)))
+         (all-listings (mercado-libre-get-all-listings query condition token))
+         (progress-reporter (make-progress-reporter
+                             "Building initial database..." 0 (length all-listings)))
+         (count 0))
     
-    ;; Store IDs in the query-specific database
+    ;; Store IDs with creation dates in the query-specific database
     (message "Building database with %d listings..." (length all-listings))
     (dolist (item all-listings)
-      (let ((item-id (cdr (assoc 'id item))))
-        (mercado-libre-update-query-db query-db item-id nil)))
+      (let* ((item-id (cdr (assoc 'id item)))
+             ;; Try to get date_created from the item itself first
+             (date-created (or (cdr (assoc 'date_created item))
+                               ;; If not found, fetch item details
+                               (when-let ((details (mercado-libre-get-item-details-cached 
+                                                    item-id token)))
+                                 (cdr (assoc 'date_created details)))
+                               ;; As a last resort, use current time
+                               (format-time-string "%Y-%m-%dT%H:%M:%S.000Z"))))
+        
+        (mercado-libre-update-query-db query-db item-id date-created)
+        
+        ;; Update progress
+        (cl-incf count)
+        (progress-reporter-update progress-reporter count)
+        
+        ;; Be gentle with API
+        (when (= (mod count 10) 0)
+          (sleep-for 0.1))))
+    
+    (progress-reporter-done progress-reporter)
     
     ;; Set the last check time
     (mercado-libre-update-last-check-time query-db)
@@ -402,7 +424,7 @@ CONDITION is \"used\", \"new\" or \"all\". TOKEN is the auth token."
     (mercado-libre-save-listings-db)
     
     (message "Database built with %d listings for '%s'."
-             (- (hash-table-count query-db) 1) query)))  ; -1 for last_check_time key
+             (- (hash-table-count query-db) 1) query))) ; -1 for last_check_time key
 
 (defun mercado-libre-setup-first-run (query condition)
   "Set up the initial monitoring for QUERY with CONDITION."
@@ -430,8 +452,12 @@ CONDITION is \"used\", \"new\" or \"all\". TOKEN is the auth token."
   (let ((new-listings '())
         (new-count 0))
     (dolist (item all-listings)
-      (let ((item-id (cdr (assoc 'id item))))
+      (let* ((item-id (cdr (assoc 'id item)))
+             (date-created (or (cdr (assoc 'date_created item))
+                               (format-time-string "%Y-%m-%dT%H:%M:%S.000Z"))))
         (unless (gethash item-id query-db)
+          ;; Store the date when we first see an item, ensure it's never nil
+          (mercado-libre-update-query-db query-db item-id date-created)
           (push item new-listings)
           (setq new-count (1+ new-count)))))
     (cons new-listings new-count)))
