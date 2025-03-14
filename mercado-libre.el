@@ -399,7 +399,7 @@ CONDITION is \"used\", \"new\" or \"all\". TOKEN is the auth token."
              ;; Try to get date_created from the item itself first
              (date-created (or (cdr (assoc 'date_created item))
                                ;; If not found, fetch item details
-                               (when-let ((details (mercado-libre-get-item-details-cached 
+                               (when-let ((details (mercado-libre-get-item-details-cached
                                                     item-id token)))
                                  (cdr (assoc 'date_created details)))
                                ;; As a last resort, use current time
@@ -537,7 +537,33 @@ MAX-ITEMS to display."
     (when first-run
       (mercado-libre-setup-first-run query condition)
       (mercado-libre-first-run query condition token)
-      (mercado-libre-complete-first-run)
+      
+      ;; Get the most recent listings to display
+      (let* ((query-db (mercado-libre-get-query-db query condition))
+             (all-items-with-dates '()))
+	
+	;; Collect all items with their dates
+	(maphash (lambda (key value)
+		   (unless (string= key "last_check_time")
+                     (when-let ((item-details (mercado-libre-get-item-details-cached key token)))
+                       (push (cons value item-details) all-items-with-dates))))
+		 query-db)
+	
+	;; Sort by date (newest first)
+	(setq all-items-with-dates
+              (sort all-items-with-dates
+                    (lambda (a b) (string> (car a) (car b)))))
+	
+	;; Display the most recent ones
+	(when all-items-with-dates
+	  (mercado-libre-display-results
+	   query
+	   (format "%s (showing %d most recent items)"
+		   condition (min max-items (length all-items-with-dates)))
+	   (seq-take all-items-with-dates max-items)
+	   (format "Initial database built with %d listings. Future checks will show only new listings."
+		   (- (hash-table-count query-db) 1)))))
+      
       (keyboard-quit))
     
     ;; Regular monitoring
