@@ -618,6 +618,35 @@ MAX-ITEMS to display."
              listings-with-dates
              (mercado-libre-format-footer query-db last-check-time))))))))
 
+;;;###autoload
+(defun mercado-libre-show-searches ()
+  "Display saved Mercado Libre search queries and run the selected one."
+  (interactive)
+  (mercado-libre-load-listings-db)
+  
+  ;; Extract unique searches from database
+  (let ((searches '()))
+    (maphash
+     (lambda (key _value)
+       (when (string-match "\\(.*\\):\\(.*\\)" key)
+         (let* ((query (match-string 1 key))
+                (condition (match-string 2 key))
+                (search-str (format "%s (%s)" query condition)))
+           (push (cons search-str (cons query condition)) searches))))
+     mercado-libre-listings-db)
+    
+    (if (null searches)
+        (message "No saved Mercado Libre searches found.")
+      ;; Sort searches alphabetically
+      (setq searches (sort searches (lambda (a b) (string< (car a) (car b)))))
+      
+      ;; Let user select a search
+      (let* ((selection (completing-read "Select a search: "
+                                         (mapcar #'car searches) nil t))
+             (selected (cdr (assoc selection searches))))
+        (when selected
+          (mercado-libre-monitor (car selected) (cdr selected)))))))
+
 ;; Load the database when this file is loaded
 (mercado-libre-load-listings-db)
 
