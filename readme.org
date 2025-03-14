@@ -1,0 +1,123 @@
+#+TITLE: mercado-libre.el
+#+AUTHOR: Pablo Stafforini
+#+LANGUAGE: en
+
+* Mercado Libre for Emacs
+
+Query and monitor the Mercado Libre marketplace directly from Emacs.
+
+** Overview
+
+=mercado-libre.el= is an Emacs package that allows you to:
+
+- Search for items on Mercado Libre
+- Monitor searches for new listings
+- Display results in a nicely formatted buffer with images
+- Track which listings you've already seen
+
+** Prerequisites
+
+This package requires authentication credentials from Mercado Libre's API:
+
+1. Register as a developer on the [[https://developers.mercadolibre.com][Mercado Libre Developers site]]
+2. Create an application to get your client ID and client secret
+3. Store your credentials using =auth-source-pass= or another secure method
+
+** Installation
+
+*** Manual
+
+Clone this repository to your Emacs load path and add this to your =init.el= file:
+
+#+begin_src emacs-lisp
+(require 'scihub)
+#+end_src
+
+*** With =use-pacakge=
+
+If you use the [[https://github.com/progfolio/elpaca][elpaca]] package manager, add this your =init.el= file:
+
+#+begin_src emacs-lisp
+;; with vc
+(use-package scihub
+  :vc (:url "https://github.com/benthamite/scihub"))
+
+;; with elpaca
+(use-package scihub
+  :ensure (:host github :repo "benthamite/scihub"))
+
+;; with straight
+(use-package scihub
+  :straight (:host github :repo "benthamite/scihub"))
+
+;; with quelpa
+(use-package scihub
+  :quelpa (scihub :fetcher github :repo "benthamite/scihub"))
+#+end_src
+
+** Configuration
+
+Store your Mercado Libre API credentials in your password manager.
+For example, with =auth-source-pass=:
+
+#+begin_src shell
+pass insert chrome/mercadolibre.com/benthamite
+# Enter app-id: YOUR_CLIENT_ID
+# app-key: YOUR_CLIENT_SECRET
+#+end_src
+
+You can customize the location of the listings database:
+
+#+begin_src emacs-lisp
+(setq mercado-libre-listings-db-file "~/path/to/listings-db.el")
+#+end_src
+
+** Usage
+
+*** Monitoring for New Listings
+
+The main command is =mercado-libre-monitor=:
+
+#+begin_src emacs-lisp
+M-x mercado-libre-monitor RET search-query RET
+#+end_src
+
+With a prefix argument (=C-u=), you can specify the condition (used/new/all):
+
+#+begin_src emacs-lisp
+C-u M-x mercado-libre-monitor RET search-query RET used RET
+#+end_src
+
+With a double prefix (=C-u C-u=), you can also specify how many items to display:
+
+#+begin_src emacs-lisp
+C-u C-u M-x mercado-libre-monitor RET search-query RET used RET 30 RET
+#+end_src
+
+*** View Saved Searches
+
+To select from previously saved search queries:
+
+#+begin_src emacs-lisp
+M-x mercado-libre-show-searches RET
+#+end_src
+
+** How it Works
+
+1. The first time you run a search, the package builds a database of all existing listings.
+2. On subsequent runs, it only shows items that have appeared since your last check.
+3. Results are displayed in a nicely formatted Org mode buffer with images.
+
+** Customization
+
+#+begin_src emacs-lisp
+M-x customize-group RET mercado-libre RET
+#+end_src
+
+** License
+
+This package is licensed under the GNU General Public License v3.0 or later.
+
+** Contributing
+
+Contributions are welcome. Please open an issue or PR on the GitHub repository.
