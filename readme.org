@@ -30,7 +30,7 @@ This package requires authentication credentials from Mercado Libre's API:
 Clone this repository to your Emacs load path and add this to your =init.el= file:
 
 #+begin_src emacs-lisp
-(require 'scihub)
+(require 'mercado-libre)
 #+end_src
 
 *** With =use-pacakge=
@@ -39,20 +39,20 @@ If you use the [[https://github.com/progfolio/elpaca][elpaca]] package manager, 
 
 #+begin_src emacs-lisp
 ;; with vc
-(use-package scihub
-  :vc (:url "https://github.com/benthamite/scihub"))
+(use-package mercado-libre
+  :vc (:url "https://github.com/benthamite/mercado-libre"))
 
 ;; with elpaca
-(use-package scihub
-  :ensure (:host github :repo "benthamite/scihub"))
+(use-package mercado-libre
+  :ensure (:host github :repo "benthamite/mercado-libre"))
 
 ;; with straight
-(use-package scihub
-  :straight (:host github :repo "benthamite/scihub"))
+(use-package mercado-libre
+  :straight (:host github :repo "benthamite/mercado-libre"))
 
 ;; with quelpa
-(use-package scihub
-  :quelpa (scihub :fetcher github :repo "benthamite/scihub"))
+(use-package mercado-libre
+  :quelpa (mercado-libre :fetcher github :repo "benthamite/mercado-libre"))
 #+end_src
 
 ** Configuration
