@@ -33,7 +33,7 @@
 (require 'json)
 (require 'url-vars)
 
-;;;; Variables
+;;;; User options
 
 (defgroup mercado-libre ()
   "Query Mercado Libre from the comfort of Emacs."
@@ -44,6 +44,35 @@
   "File to store the database of previously seen Mercado Libre listings."
   :type 'file
   :group 'mercado-libre)
+
+(defcustom mercado-libre-client-id nil
+  "Client ID for the Mercado Libre API.
+To obtain this, register an application on the Mercado Libre developer site."
+  :type 'string
+  :group 'mercado-libre)
+
+(defcustom mercado-libre-client-key nil
+  "Client Secret for the Mercado Libre API.
+To obtain this, register an application on the Mercado Libre developer site."
+  :type 'string
+  :group 'mercado-libre)
+
+(defcustom mercado-libre-initial-results-limit 20
+  "Maximum number of results to display after initial database setup.
+If nil, all results will be displayed. Warning: this may be very slow if there
+are hundreds or thousands of results to display."
+  :type '(choice (const :tag "No limit" nil)
+                 (integer :tag "Number of results"))
+  :group 'mercado-libre)
+
+(defcustom mercado-libre-new-results-limit 20
+  "Maximum number of new results to display during regular monitoring.
+If nil, all new results will be displayed."
+  :type '(choice (const :tag "No limit" nil)
+                 (integer :tag "Number of results"))
+  :group 'mercado-libre)
+
+;;;; Variables
 
 (defvar mercado-libre-listings-db (make-hash-table :test 'equal)
   "Hash table of previously seen Mercado Libre listings.
@@ -64,12 +93,12 @@ timestamp)'.")
         (client-secret (auth-source-pass-get "app-key" "chrome/mercadolibre.com/benthamite")))
     (cons client-id client-secret)))
 
-(defun mercado-libre-get-token (client-id client-secret)
-  "Get auth token for Mercado Libre API using CLIENT-ID and CLIENT-SECRET."
-  (if (or (null client-id) (null client-secret))
-      (progn
-        (message "Error: Missing Mercado Libre API credentials")
-        nil)
+(defun mercado-libre-get-token ()
+  "Get auth token for Mercado Libre API."
+  (if (or (null mercado-libre-client-id) (null mercado-libre-client-key))
+      (user-error "Error: Missing Mercado Libre API credentials. Please set `%s' and `%s'"
+		  (symbol-name 'mercado-libre-client-id)
+		  (symbol-name 'mercado-libre-client-key))
     (let* ((url "https://api.mercadolibre.com/oauth/token")
            (url-request-method "POST")
            (url-request-extra-headers
@@ -77,7 +106,7 @@ timestamp)'.")
               ("Content-Type" . "application/x-www-form-urlencoded")))
            (url-request-data
             (format "grant_type=client_credentials&client_id=%s&client_secret=%s"
-                    client-id client-secret))
+                    mercado-libre-client-id mercado-libre-client-key))
            (response-buffer (url-retrieve-synchronously url t)))
       (mercado-libre-extract-token-from-response response-buffer))))
 
@@ -365,7 +394,9 @@ and CONDITION are used for the buffer title."
     (with-selected-window window
       (goto-char (point-min))
       (org-display-inline-images)))
-  (org-display-inline-images))
+  (with-current-buffer (get-buffer mercado-libre-buffer-name)
+    (goto-char (point-min))
+    (org-display-inline-images)))
 
 (defun mercado-libre-display-no-results (query condition last-check-time query-db)
   "Display message when no new listings found.
@@ -523,15 +554,17 @@ MAX-ITEMS to display."
            "used")
          (if (and current-prefix-arg (>= (prefix-numeric-value current-prefix-arg) 16))
              (read-number "Maximum new items to show: " 20)
-           20)))
+           nil))) ; Changed to nil to use the customization variable instead
   
-  (let* ((credentials (mercado-libre-get-credentials))
-         (client-id (car credentials))
-         (client-secret (cdr credentials))
-         (token (mercado-libre-get-token client-id client-secret))
+  (let* ((token (mercado-libre-get-token))
          (query-db (mercado-libre-get-query-db query condition))
          (last-check-time (mercado-libre-get-last-check-time query-db))
-         (first-run (or (null query-db) (null last-check-time))))
+         (first-run (or (null query-db) (null last-check-time)))
+         ;; Use the customization variable if max-items is nil
+         (display-limit (or max-items
+                            (if first-run
+                                mercado-libre-initial-results-limit
+                              mercado-libre-new-results-limit))))
     
     ;; Handle first run
     (when first-run
@@ -556,13 +589,20 @@ MAX-ITEMS to display."
 	
 	;; Display the most recent ones
 	(when all-items-with-dates
-	  (mercado-libre-display-results
-	   query
-	   (format "%s (showing %d most recent items)"
-		   condition (min max-items (length all-items-with-dates)))
-	   (seq-take all-items-with-dates max-items)
-	   (format "Initial database built with %d listings. Future checks will show only new listings."
-		   (- (hash-table-count query-db) 1)))))
+          (let ((items-to-display (if display-limit
+                                      (seq-take all-items-with-dates
+                                                (min display-limit (length all-items-with-dates)))
+                                    all-items-with-dates))
+                (display-count (if display-limit
+                                   (min display-limit (length all-items-with-dates))
+                                 (length all-items-with-dates))))
+            (mercado-libre-display-results
+             query
+             (format "%s (showing %d most recent items)"
+                     condition display-count)
+             items-to-display
+             (format "Initial database built with %d listings. Future checks will show only new listings."
+                     (- (hash-table-count query-db) 1))))))
       
       (keyboard-quit))
     
@@ -589,8 +629,8 @@ MAX-ITEMS to display."
         
         ;; Sort and limit new listings
         (setq new-listings (mercado-libre-sort-listings-by-date new-listings))
-        (when (and max-items (> new-count max-items))
-          (setq new-listings (seq-take new-listings max-items)))
+        (when (and display-limit (> new-count display-limit))
+          (setq new-listings (seq-take new-listings display-limit)))
         
         ;; Fetch details for new listings
         (message "Fetching details for %d new listings..." (length new-listings))
