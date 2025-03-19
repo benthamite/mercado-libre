@@ -108,12 +108,6 @@ M-x mercado-libre-show-searches RET
 2. On subsequent runs, it only shows items that have appeared since your last check.
 3. Results are displayed in a nicely formatted Org mode buffer with images.
 
-** Customization
-
-#+begin_src emacs-lisp
-M-x customize-group RET mercado-libre RET
-#+end_src
-
 ** License
 
 This package is licensed under the GNU General Public License v3.0 or later.
