@@ -21,7 +21,7 @@ This package requires authentication credentials from Mercado Libre's API:
 
 1. Register as a developer on the [[https://developers.mercadolibre.com][Mercado Libre Developers site]]
 2. Create an application to get your client ID and client secret
-3. Store your credentials using =auth-source-pass= or another secure method
+3. Store your credentials in =mercado-libre-client-id= and =mercado-libre-client-key=.
 
 ** Installation
 
@@ -57,19 +57,19 @@ If you use the [[https://github.com/progfolio/elpaca][elpaca]] package manager, 
 
 ** Configuration
 
-Store your Mercado Libre API credentials in your password manager.
-For example, with =auth-source-pass=:
-
-#+begin_src shell
-pass insert chrome/mercadolibre.com/benthamite
-# Enter app-id: YOUR_CLIENT_ID
-# app-key: YOUR_CLIENT_SECRET
-#+end_src
-
-You can customize the location of the listings database:
+You can customize various aspects of the package:
 
 #+begin_src emacs-lisp
+;; Set your API credentials
+(setq mercado-libre-client-id "YOUR_CLIENT_ID"
+      mercado-libre-client-secret "YOUR_CLIENT_SECRET")
+
+;; Location of the listings database
 (setq mercado-libre-listings-db-file "~/path/to/listings-db.el")
+
+;; Number of results displayed
+(setq mercado-libre-initial-results-limit 20)  ; For first-time runs
+(setq mercado-libre-new-results-limit 30)      ; For subsequent checks
 #+end_src
 
 ** Usage
