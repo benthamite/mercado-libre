@@ -1,4 +1,4 @@
-;;; mercado-libre.el --- Query Mercado Libre from the comfort of Emacs -*- lexical-binding: t; fill-column: 80 -*-
+;;; mercado-libre.el --- Query Mercado Libre from the comfort of Emacs -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2025
 
