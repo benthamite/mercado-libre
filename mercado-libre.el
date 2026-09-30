@@ -29,7 +29,6 @@
 
 (require 'cl-lib)
 (require 'org)
-(require 'auth-source-pass)
 (require 'json)
 (require 'url-vars)
 
@@ -87,10 +86,11 @@ timestamp)'.")
 
 ;;;; API Access
 
+(autoload 'auth-source-extras-op-get "auth-source-extras")
 (defun mercado-libre-get-credentials ()
-  "Get Mercado Libre API credentials from auth-source."
-  (let ((client-id (auth-source-pass-get "app-id" "chrome/mercadolibre.com/benthamite"))
-        (client-secret (auth-source-pass-get "app-key" "chrome/mercadolibre.com/benthamite")))
+  "Get Mercado Libre API credentials from the 1Password Automation vault."
+  (let ((client-id (auth-source-extras-op-get "mercadolibre.com/benthamite" "app-id"))
+        (client-secret (auth-source-extras-op-get "mercadolibre.com/benthamite" "app-key")))
     (cons client-id client-secret)))
 
 (defun mercado-libre-get-token ()

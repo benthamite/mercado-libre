@@ -23,6 +23,8 @@ This package requires authentication credentials from Mercado Libre's API:
 2. Create an application to get your client ID and client secret
 3. Store your credentials in =mercado-libre-client-id= and =mercado-libre-client-key=.
 
+~mercado-libre-get-credentials~ returns the pair from the =app-id= and =app-key= fields of the item =mercadolibre.com/benthamite= in a 1Password Automation vault, read with ~auth-source-extras-op-get~ from =auth-source-extras.el=.
+
 ** Installation
 
 *** Manual
